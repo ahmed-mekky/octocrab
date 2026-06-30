@@ -232,19 +232,18 @@ use http_body_util::BodyExt;
 use service::middleware::auth_header::AuthHeaderLayer;
 use service::middleware::cache::{CacheStorage, HttpCacheLayer};
 use std::convert::{Infallible, TryInto};
+use std::fmt;
 use std::future::Future;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use std::{fmt, usize};
 use web_time::Duration;
 
 use http::{header::HeaderName, StatusCode};
 use hyper::{Request, Response};
 
-use once_cell::sync::Lazy;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use snafu::*;
@@ -320,8 +319,8 @@ const GITHUB_BASE_UPLOAD_URI: &str = "https://uploads.github.com";
 include!(concat!(env!("OUT_DIR"), "/headers_metadata.rs"));
 
 #[cfg(feature = "default-client")]
-static STATIC_INSTANCE: Lazy<arc_swap::ArcSwap<Octocrab>> =
-    Lazy::new(|| arc_swap::ArcSwap::from_pointee(Octocrab::default()));
+static STATIC_INSTANCE: std::sync::LazyLock<arc_swap::ArcSwap<Octocrab>> =
+    std::sync::LazyLock::new(|| arc_swap::ArcSwap::from_pointee(Octocrab::default()));
 
 /// Formats a GitHub preview from it's name into the full value for the
 /// `Accept` header.
@@ -1194,7 +1193,7 @@ impl Octocrab {
         };
 
         let token = match token.valid_token_with_buffer(buffer) {
-            Some(token) => token.into(),
+            Some(token) => token,
             None => self.request_installation_auth_token().await?,
         };
 
@@ -1561,7 +1560,7 @@ impl Octocrab {
 
     /// Convenience method to accept any &str, and attempt to convert it to a Uri.
     /// the method also attempts to serialize any parameters into a query string, and append it to the uri.
-    fn parameterized_uri<A, P>(&self, uri: A, parameters: Option<&P>) -> Result<Uri>
+    pub(crate) fn parameterized_uri<A, P>(&self, uri: A, parameters: Option<&P>) -> Result<Uri>
     where
         A: AsRef<str>,
         P: Serialize + ?Sized,
